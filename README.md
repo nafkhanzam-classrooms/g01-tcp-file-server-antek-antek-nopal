@@ -4,8 +4,8 @@
 ## Anggota Kelompok
 | Nama           | NRP        | Kelas     |
 | ---            | ---        | ----------|
-|                |            |           |
-|                |            |           |
+|Naufal Daffa Alfa Zain |5025241066 |     D      |
+|Muhamad Aziz Romdhoni |5025241071 |      D     |
 
 ## Link Youtube (Unlisted)
 Link ditaruh di bawah ini
