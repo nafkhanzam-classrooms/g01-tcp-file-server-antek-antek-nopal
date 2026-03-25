@@ -105,8 +105,8 @@ File yang diupload oleh client akan disimpan di folder `server_files` pada serve
 ```
 test pesan
 /list
-/upload client_downloads/g1-upload.txt
-/download g1-upload.txt
+/upload contoh.txt
+/download contoh.txt
 ```
 Perintah pertama akan mengirim pesan chat biasa, sedangkan perintah lainnya digunakan untuk melihat daftar file di server, mengupload file, dan mendownload file dari serve
 
