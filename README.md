@@ -14,7 +14,101 @@ https://youtu.be/j6pUfNls7HM
 ```
 
 ## Penjelasan Program
+Program ini merupakan aplikasi terminal berbasis TCP yang terdiri dari empat jenis server dan satu program client. Semua server memiliki fitur yang sama, yaitu mengirim pesan antar client (broadcast message), melihat daftar file yang ada di server, mengupload file ke server, serta mendownload file dari server. Perbedaan utama dari keempat server tersebut adalah cara mereka menangani banyak client yang terhubung secara bersamaan. Ada server yang hanya melayani satu client, ada yang menggunakan thread, dan ada juga yang menggunakan mekanisme event seperti select dan poll.
 
+### client.py
+
+`client.py` berfungsi sebagai program yang digunakan oleh user untuk berinteraksi dengan server melalui terminal. Jika user mengetik teks biasa, maka teks tersebut akan dikirim sebagai pesan chat ke server. Server kemudian akan meneruskan pesan tersebut ke client lain yang sedang terhubung. Jika user mengetik perintah khusus seperti `/list, /upload, atau /download`, maka client akan menjalankan fitur yang sesuai dengan perintah tersebut. Di dalam client juga terdapat thread khusus untuk menerima data dari server. Ini memungkinkan client tetap bisa menerima pesan broadcast atau file download, walaupun user sedang mengetik sesuatu di terminal.
+
+Function penting:
+
+- `send_packet(sock, packet)`
+Function ini digunakan untuk mengirim data dari client ke server dalam format JSON. Semua request dari client, seperti pesan chat, permintaan daftar file, upload file, dan download file, dikirim melalui function ini.
+- `receive(sock)`
+Function ini berjalan pada thread terpisah dan bertugas menerima respon dari server. Jika server mengirim pesan broadcast, pesan tersebut akan langsung ditampilkan di terminal. Jika server mengirim file, function ini juga akan menyimpan file tersebut ke folder client_downloads.
+- `upload(sock, path)`
+Function ini digunakan saat user menjalankan perintah /upload. Client akan membaca file dari komputer lokal, lalu mengirim informasi file dan isi file ke server.
+
+### server-sync.py
+
+`server-sync.py` adalah versi server yang paling sederhana. Server ini hanya bisa melayani satu client pada satu waktu. Jika satu client sedang melakukan suatu proses, misalnya upload file, maka client lain harus menunggu sampai proses tersebut selesai sebelum bisa dilayani oleh server.
+
+Function penting:
+
+- `send_packet(sock, packet)`
+Function ini digunakan untuk mengirim respon dari server ke client dalam format JSON, misalnya pesan chat, daftar file, atau informasi bahwa proses upload telah selesai.
+- `list_files()`
+Function ini membaca isi folder server_files, kemudian mengembalikan daftar file yang tersedia di server.
+- `handle_client(conn, addr)`
+Function ini merupakan bagian utama yang menangani komunikasi dengan client. Di dalam function ini server membaca request dari client dan menentukan apakah client mengirim pesan chat, meminta daftar file, melakukan upload file, atau mendownload file.
+
+### server-thread.py
+
+Pada server ini, setiap client yang terhubung akan ditangani oleh thread yang berbeda. Dengan cara ini, beberapa client dapat berinteraksi dengan server secara bersamaan tanpa harus menunggu satu sama lain. Server juga menyimpan daftar client yang sedang aktif, sehingga jika ada client yang mengirim pesan chat, pesan tersebut dapat dikirim ke semua client lain yang sedang terhubung.
+
+Function penting:
+
+- `send_packet(client, packet)`
+Function ini digunakan untuk mengirim data ke satu client. Karena server menggunakan banyak thread, proses pengiriman dibungkus dengan lock agar tidak terjadi benturan data saat beberapa thread mengirim data secara bersamaan.
+- `broadcast(packet)`
+Function ini bertugas mengirim pesan ke semua client yang sedang terhubung. Fitur chat antar client sangat bergantung pada function ini.
+- `handle_client(conn, addr)`
+Function ini berjalan di thread masing-masing client. Di dalamnya server membaca request dari client dan menjalankan perintah seperti chat, melihat daftar file, upload, atau download file.
+- `send_file(client, path, name)`
+Function ini digunakan saat client meminta download file. Server akan mengirim informasi file terlebih dahulu, kemudian mengirim isi file tersebut ke client.
+
+### server-select.py
+
+Server ini menggunakan modul select untuk memantau banyak koneksi socket secara bersamaan tanpa perlu membuat thread untuk setiap client. Server akan terus mengecek socket mana yang siap untuk dibaca atau ditulis, lalu memprosesnya dalam satu loop utama. Dengan cara ini, server tetap dapat melayani banyak client secara bersamaan dengan penggunaan resource yang lebih efisien dibandingkan membuat banyak thread.
+
+Function penting:
+
+- `packet_bytes(packet)`
+Function ini mengubah data JSON menjadi bentuk bytes, sehingga data tersebut bisa dimasukkan ke antrean pengiriman client.
+- `handle_packet(client, packet, clients)`
+Function ini bertugas memproses packet yang diterima dari client, seperti pesan chat, permintaan daftar file, upload file, atau download file.
+- `process_input(client, clients)`
+Function ini memproses data yang diterima dari client. Jika client sedang mengupload file, data akan langsung ditulis ke file di server. Jika tidak, data akan diproses sebagai packet JSON biasa.
+- `flush_output(client)`
+Function ini mengirim data yang sudah ada di antrean output client, ketika socket sudah siap untuk melakukan pengiriman data.
+
+### server-poll.py
+
+`server-poll.py` memiliki konsep yang hampir sama dengan `server-select.py`, tetapi menggunakan mekanisme poll. Tujuannya tetap sama, yaitu memantau banyak koneksi client secara bersamaan dalam satu proses server, tanpa harus membuat thread untuk setiap client. Perbedaannya hanya terletak pada cara sistem mendeteksi event pada socket, karena poll menggunakan file descriptor untuk mengidentifikasi koneksi.
+
+Function penting:
+
+- `packet_bytes(packet)`
+Function ini mengubah packet JSON menjadi bytes sebelum dikirim melalui socket.
+- `handle_packet(client, packet, clients)`
+Function ini memproses request dari client, seperti pesan chat, melihat daftar file, upload file, atau download file.
+- `process_input(client, clients)`
+Function ini memproses data yang diterima dari client, baik berupa pesan chat biasa maupun data file saat proses upload.
+- `close_client(clients, by_fd, poller, sock)`
+Function ini digunakan ketika koneksi client selesai atau terputus, sehingga socket tersebut dapat dihapus dari daftar client aktif dan dari sistem pemantauan poll.
+
+### Fitur Transfer File
+
+File yang diupload oleh client akan disimpan di folder `server_files` pada server. Jika client melakukan download file, maka file tersebut akan disimpan di folder `client_downloads` pada sisi client. Proses upload dan download dapat langsung terlihat hasilnya saat program dijalankan.
+
+### Cara Menjalankan Program
+
+1. Pertama, jalankan salah satu server, misalnya:
+
+`python3 server-thread.py`
+
+2. Kemudian jalankan client pada terminal lain:
+
+`python3 client.py`
+
+3. Beberapa command yang bisa digunakan pada client:
+```
+test pesan
+/list
+/upload client_downloads/g1-upload.txt
+/download g1-upload.txt
+```
+Perintah pertama akan mengirim pesan chat biasa, sedangkan perintah lainnya digunakan untuk melihat daftar file di server, mengupload file, dan mendownload file dari serve
 
 ## Screenshot Hasil
 ### 1. Server-sync.py
